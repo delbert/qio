@@ -1,6 +1,3 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-
 from datetime import datetime
 from math import sqrt
 import numpy as np
@@ -34,14 +31,24 @@ print ( 'login successful' )
 
 loc = getLoc ()
 nLoc = len ( loc )
-nVehicle = getNVehicle ()
-nCapacity = getNCapacity ()
-akIndexBase = ( nLoc - 1 ) * nVehicle * ( nLoc + 1 )  + nLoc * nVehicle + nVehicle
-nkIndexBase = nLoc * nVehicle
-nkIndexMax = ( nCapacity + 1 ) * nVehicle
+nVehicle = 0 #getNVehicle ()
+nCapacity = 0 #getNCapacity ()
+akIndexBase = 0
+nkIndexBase = 0
+nkIndexMax = 0
 fix = dict () # global dict for fixing solver variables
-
 penalty = [ 1.0 for _ in range ( 10 ) ]
+
+def overrideGlobals ( nV , nC ) : 
+    global nVehicle , nCapacity , akIndexBase , nkIndexBase , nkIndexMax
+    nVehicle = nV
+    nCapacity = nC
+    akIndexBase = ( nLoc - 1 ) * nVehicle * ( nLoc + 1 )  + nLoc * nVehicle + nVehicle
+    nkIndexBase = nLoc * nVehicle
+    nkIndexMax = ( nCapacity + 1 ) * nVehicle
+    print ( 'nLoc-> {} nVehicle-> {} nCapacity-> {} akIndexBase-> {} nkIndexBase-> {} nkIndexMax-> {}'.format ( 
+                                                                            nLoc , nVehicle , nCapacity , akIndexBase , nkIndexBase, nkIndexMax ) )
+
 
 def vjk_index ( v , j , k ) :
     # vertex v ( loc [ v ] ) -- range ( nLoc )
@@ -75,9 +82,6 @@ def invert_nk_index ( s ) :
     k = s - akIndexBase - nkIndexBase - nVehicle * n
     return ( n , k )
 
-print ( 'nLoc-> {} nVehicle-> {} nCapacity-> {} akIndexBase-> {} nkIndexBase-> {} nkIndexMax-> {}'.format ( 
-                                                                            nLoc , nVehicle , nCapacity , akIndexBase , nkIndexBase, nkIndexMax ) )
-
 def cost ( u , v ) :
     return sqrt ( ( loc [ v ] [ 0 ] - loc [ u ] [ 0 ] ) ** 2 + ( loc [ v ] [ 1 ] - loc [ u ] [ 1 ] ) ** 2 )
 
@@ -109,7 +113,9 @@ def setPenalties () :
 
     #maxC = ( maxDistance () / 2 ) * nCapacity * nVehicle
     #maxC = maxDistance ()
-    maxC = tspSolutionCost ()
+    #maxC = tspSolutionCost ()
+    #maxC = 784
+    maxC = 1300
     print ( 'max cost {}'.format ( maxC ) )
     #penalty [ 2 ] = 64
     penalty [ 4 ] = 2.0
@@ -123,7 +129,7 @@ def setPenalties () :
     print ( ' ' )
 
 def timeStamp ( msg : str ) :
-    print ( msg + ': ' + datetime.now ().strftime ( '%H:%M:%S') )
+    print ( msg + ': ' + datetime.now ().strftime ( '%m/%d %H:%M:%S' ) )
 
 def h1Terms () -> List [ Term ] :
     # every v should appear once in a cycle ( except v = 0 at j = 0 and j = nLoc + 1 )
@@ -150,15 +156,7 @@ def h2Terms () -> List [ Term ] :
                 vTerms.append ( Term ( c = -1.0 , indices = [ vjk_index ( v , j , k ) ] ) )
             terms += tSquare ( vTerms )
     return tMultiply ( terms , [ Term ( c = penalty [ 1 ] , indices = [] ) ] )
-'''
-def p2Terms () -> List [ Term ] :
-    # try to force starting and ending nodes = 0 ( penalize all other j for v0 )
-    terms = []
-    for k in range ( nVehicle ) :
-        for j in range ( 1 , nLoc ) :
-            terms.append ( Term ( c = penalty [ 2 ] , indices = [ vjk_index ( 0 , j , k ) ] ) )
-    return tSimplify ( terms )
-'''
+
 def h3Terms () -> List [ Term ] :
     # for each vehicle's cycle, an edge does not trace to itself -- except v = 0
     timeStamp ( 'h3' )
@@ -265,34 +263,41 @@ def printResults ( config : dict ) :
 def dumpResults ( config : dict ) :
     print ( sorted ( [ ( int ( k ) , v ) for k , v in config.items() ] ) )
 
-setPenalties ()
+def callSolver ( solver , problem ) :
+    print ( 'calling solver: {}'.format ( solver.target ) )
+    result = solver.optimize ( problem )
+    print ( 'cost->{}'.format ( result [ 'cost' ] ) )
 
-terms = h1Terms () + h2Terms () + h3Terms () + h4Terms () + h9Terms ()  + h5Terms () + h6Terms () + h8Terms () # + p2Terms ()
+    r = tFixPost ( result [ 'configuration' ] , fix )
+    r = result [ 'configuration' ]
+    dumpResults ( r )
+    printResults ( r )
 
-print ( 'terms-> ' , len ( terms ) )
+def mainloop ( nV , nC ) :
+    overrideGlobals ( nV , nC )
+    setPenalties ()
 
-terms = fixDepotValues ( terms )
+    terms = h1Terms () + h2Terms () + h3Terms () + h4Terms () + h9Terms ()  + h5Terms () + h6Terms () + h8Terms () # + p2Terms ()
 
-timeStamp ( 'tSimplify' )
-terms = tSimplify ( terms )
+    print ( 'terms-> ' , len ( terms ) )
 
-timeStamp ( 'terms' )
-print ( 'terms-> ' , len ( terms ) )
-#print ( terms )
-#print ( ' ' )
+    terms = fixDepotValues ( terms )
 
-problem = Problem ( name = 'vrp {} locs'.format ( nLoc ) , problem_type = ProblemType.pubo , terms = terms )
+    timeStamp ( 'tSimplify' )
+    terms = tSimplify ( terms )
 
-solver = SimulatedAnnealing ( workspace , timeout = 100 ) 
-#solver = ParallelTempering ( workspace , timeout = 100 ) 
+    timeStamp ( 'terms' )
+    print ( 'terms-> ' , len ( terms ) )
+    #print ( terms )
+    #print ( ' ' )
 
-print ( 'calling solver: {}'.format ( solver.target ) )
-result = solver.optimize ( problem )
-print ( 'cost->{}'.format ( result [ 'cost' ] ) )
+    problem = Problem ( name = 'vrp {} locs'.format ( nLoc ) , problem_type = ProblemType.pubo , terms = terms )
 
-r = tFixPost ( result [ 'configuration' ] , fix )
-r = result [ 'configuration' ]
-dumpResults ( r )
-printResults ( r )
+    for solver in [ SimulatedAnnealing ( workspace , timeout = 100 ) , ParallelTempering ( workspace , timeout = 100 ) , Tabu ( workspace , timeout = 100 ) ] :
+        callSolver ( solver , problem )
+
+
+for ( nV , nC ) in [ ( 1 , 8 ) , ( 2 , 4 ) , ( 3 , 3 ) , ( 4 , 2 ) ] :
+    mainloop ( nV , nC )
 
 print ( '...fini' )
