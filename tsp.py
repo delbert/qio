@@ -1,6 +1,3 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT License.
-
 from collections import Counter
 from math import sqrt
 import random
@@ -27,6 +24,9 @@ print ( 'login successful' )
 # travelling salesman / Lucas:  arXiv:1302.5843v3 [cond-mat.stat-mech] 24 Jan 2014
 # [ 0 ] == depot
 loc = [ [ 1 , 1 ] , [ 3 , 2 ] , [ 5 , 3 ] , [ 1 , 4 ] , [ 3 , 5 ] ]
+# diag        0             3             4             6             7
+# this        0             1             2             3             4
+#loc =  [ [ 42 , 42 ] , [ 23 , 67 ] , [ 37 , 47 ] , [ 73 , 73 ] , [ 69 , 71 ] ]
 nLoc = len ( loc )
 
 penalty = [ 1.0 for _ in range ( 5 ) ]
@@ -53,7 +53,9 @@ def maxCost () :
 def setPenalties () :
     maxC = maxCost ()
     print ( 'max cost {}'.format ( maxC ) )
-    penalty [ 4 ] = penalty [ 2 ] = 2.0
+    penalty [ 2 ] = penalty [ 4 ] = 2.0
+    #penalty [ 2 ] = 64.0
+    #penalty [ 4 ] = 2.0
     penalty [ 0 ] = penalty [ 1 ] = penalty [ 3 ] = penalty [ 4 ] * float ( round ( maxC ) ) * 2.0
     print ( ' penalties : ' )
     for p in range ( len ( penalty ) ) :
@@ -129,15 +131,18 @@ setPenalties ()
 terms = tSimplify ( h1Terms () + h2Terms () + p2Terms () + h3Terms () + h4Terms () )
 
 print ( 'terms-> ' , len ( terms ) )
+
 print ( terms )
 print ( ' ' )
 
 problem = Problem ( name = 'tsp {} locs'.format ( nLoc ) , problem_type = ProblemType.pubo , terms = terms )
 
 solver = SimulatedAnnealing ( workspace , timeout = 100 ) 
+#solver = ParallelTempering ( workspace , timeout = 100 ) 
 
-print ( 'calling solver' )
+print ( 'calling solver: {}'.format ( solver.target ) )
 result = solver.optimize ( problem )
+print ( 'cost->{}'.format ( result [ 'cost' ] ) )
 
 print ( result )
 printResults ( result [ "configuration" ] )
